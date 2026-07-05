@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Kharcha — Voice Expense Log</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --ink: #1C1B1A;
+    --ink-2: #262523;
+    --ink-3: #322F2B;
+    --parchment: #F0EBE1;
+    --parchment-dim: #B8B2A5;
+    --brass: #C9A15C;
+    --brass-dim: #8A7248;
+    --rust: #C15F44;
+    --sage: #8A9A7E;
+    --line: rgba(240, 235, 225, 0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--ink);
+    color: var(--parchment);
+    font-family: 'Inter', sans-serif;
+    overscroll-behavior: none;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .serif { font-family: 'Fraunces', serif; }
+
+  /* Header */
+  header {
+    padding: 20px 20px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  header .brand {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  header .brand span { color: var(--brass); }
+  .tab-toggle {
+    display: flex;
+    gap: 4px;
+    background: var(--ink-2);
+    border-radius: 20px;
+    padding: 3px;
+  }
+  .tab-toggle button {
+    border: none;
+    background: transparent;
+    color: var(--parchment-dim);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 16px;
+    cursor: pointer;
+  }
+  .tab-toggle button.active {
+    background: var(--brass);
+    color: var(--ink);
+  }
+
+  /* Log view */
+  #log-view { flex: 1; display: flex; flex-direction: column; }
+
+  .week-total {
+    text-align: center;
+    padding: 18px 20px 8px;
+  }
+  .week-total .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--parchment-dim);
+    margin-bottom: 6px;
+  }
+  .week-total .amount {
+    font-family: 'Fraunces', serif;
+    font-size: 44px;
+    font-weight: 500;
+    color: var(--parchment);
+  }
+  .week-total .amount .sym { color: var(--brass); font-size: 30px; margin-right: 2px; }
+
+  .mic-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 20px;
+    min-height: 260px;
+  }
+
+  .mic-btn {
+    width: 108px;
+    height: 108px;
+    border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle at 35% 30%, #d9b56e, var(--brass) 60%, var(--brass-dim));
+    box-shadow: 0 8px 24px rgba(201, 161, 92, 0.35), inset 0 2px 6px rgba(255,255,255,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.15s ease;
+  }
+  .mic-btn:active { transform: scale(0.96); }
+  .mic-btn svg { width: 40px; height: 40px; fill: var(--ink); }
+
+  .mic-btn.listening {
+    animation: pulse 1.4s ease-in-out infinite;
+    background: radial-gradient(circle at 35% 30%, #d67a5c, var(--rust) 60%, #9c4530);
+  }
+  .mic-btn.listening::before,
+  .mic-btn.listening::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--rust);
+    animation: ripple 1.6s ease-out infinite;
+  }
+  .mic-btn.listening::after { animation-delay: 0.5s; }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+  @keyframes ripple {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  .mic-hint {
+    font-size: 14px;
+    color: var(--parchment-dim);
+    text-align: center;
+    min-height: 20px;
+    max-width: 280px;
+    line-height: 1.4;
+  }
+  .mic-hint.transcript {
+    color: var(--parchment);
+    font-style: italic;
+  }
+
+  .manual-link {
+    background: none;
+    border: none;
+    color: var(--brass);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 8px;
+  }
+
+  /* Manual entry sheet */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: flex-end;
+    z-index: 50;
+  }
+  .sheet-backdrop.open { display: flex; }
+  .sheet {
+    background: var(--ink-2);
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .sheet h3 { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .sheet input {
+    background: var(--ink-3);
+    border: 1px solid var(--line);
+    color: var(--parchment);
+    font-size: 16px;
+    padding: 14px;
+    border-radius: 10px;
+    font-family: 'Inter', sans-serif;
+  }
+  .sheet input:focus { outline: 2px solid var(--brass); }
+  .cat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .cat-chip {
+    padding: 10px 6px;
+    border-radius: 10px;
+    background: var(--ink-3);
+    border: 1px solid var(--line);
+    color: var(--parchment-dim);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+  }
+  .cat-chip.selected {
+    background: var(--brass);
+    color: var(--ink);
+    border-color: var(--brass);
+  }
+  .sheet-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .btn {
+    flex: 1;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+  .btn-primary { background: var(--brass); color: var(--ink); }
+  .btn-ghost { background: transparent; color: var(--parchment-dim); border: 1px solid var(--line); }
+
+  /* Recent entries (today) */
+  .today-list {
+    padding: 4px 20px 20px;
+  }
+  .today-list .heading {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--parchment-dim);
+    margin-bottom: 10px;
+  }
+  .entry-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .entry-row:last-child { border-bottom: none; }
+  .entry-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: var(--ink-3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+  .entry-info { flex: 1; min-width: 0; }
+  .entry-info .cat { font-size: 14px; font-weight: 600; }
+  .entry-info .note { font-size: 12px; color: var(--parchment-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry-amount { font-family: 'Fraunces', serif; font-size: 17px; font-weight: 600; color: var(--rust); flex-shrink: 0; }
+  .empty-note { text-align: center; color: var(--parchment-dim); font-size: 13px; padding: 30px 20px; }
+
+  /* Review view */
+  #review-view { flex: 1; padding: 8px 20px 30px; display: none; }
+  #review-view.active { display: block; }
+  #log-view.hidden { display: none; }
+
+  .review-total-card {
+    background: linear-gradient(135deg, var(--ink-2), var(--ink-3));
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .review-total-card .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--parchment-dim); margin-bottom: 6px; }
+  .review-total-card .amount { font-family: 'Fraunces', serif; font-size: 38px; font-weight: 500; }
+  .review-total-card .amount .sym { color: var(--brass); font-size: 26px; }
+  .review-total-card .sub { font-size: 12px; color: var(--parchment-dim); margin-top: 6px; }
+
+  .cat-breakdown { margin-bottom: 22px; }
+  .cat-breakdown .heading, .day-group .heading {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--parchment-dim); margin-bottom: 12px;
+  }
+  .cat-bar-row { margin-bottom: 12px; }
+  .cat-bar-row .top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+  .cat-bar-row .top .name { font-weight: 600; }
+  .cat-bar-row .top .val { color: var(--parchment-dim); font-family: 'Fraunces', serif; }
+  .cat-bar-track { height: 6px; background: var(--ink-3); border-radius: 3px; overflow: hidden; }
+  .cat-bar-fill { height: 100%; background: var(--brass); border-radius: 3px; }
+
+  .day-group { margin-bottom: 18px; }
+  .day-group .heading { display: flex; justify-content: space-between; }
+
+  select.period-select {
+    background: var(--ink-2);
+    color: var(--parchment);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    font-family: 'Inter', sans-serif;
+    width: 100%;
+  }
+
+  .clear-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    background: transparent;
+    border: 1px solid rgba(193, 95, 68, 0.4);
+    color: var(--rust);
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 10px;
+    cursor: pointer;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--sage);
+    color: var(--ink);
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 700;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Kharcha<span>.</span></div>
+  <div class="tab-toggle">
+    <button id="tab-log" class="active">Log</button>
+    <button id="tab-review">Review</button>
+  </div>
+</header>
+
+<div id="log-view">
+  <div class="week-total">
+    <div class="label">Today's spend</div>
+    <div class="amount"><span class="sym">₹</span><span id="today-total">0</span></div>
+  </div>
+
+  <div class="mic-stage">
+    <button class="mic-btn" id="mic-btn" aria-label="Log expense by voice">
+      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+    </button>
+    <div class="mic-hint" id="mic-hint">Tap and say something like<br>"two twenty petrol" or "500 groceries"</div>
+    <button class="manual-link" id="manual-open">or type it manually</button>
+  </div>
+
+  <div class="today-list" id="today-list">
+    <div class="empty-note">Nothing logged today yet — tap the mic to start.</div>
+  </div>
+</div>
+
+<div id="review-view">
+  <select class="period-select" id="period-select">
+    <option value="7">Last 7 days</option>
+    <option value="30">Last 30 days</option>
+    <option value="all">All time</option>
+  </select>
+
+  <div class="review-total-card">
+    <div class="label">Total spent</div>
+    <div class="amount"><span class="sym">₹</span><span id="review-total">0</span></div>
+    <div class="sub" id="review-count">0 entries</div>
+  </div>
+
+  <div class="cat-breakdown">
+    <div class="heading">By category</div>
+    <div id="cat-bars"></div>
+  </div>
+
+  <div id="day-groups"></div>
+
+  <button class="clear-btn" id="clear-btn">Clear all data</button>
+</div>
+
+<div class="sheet-backdrop" id="sheet-backdrop">
+  <div class="sheet">
+    <h3>Add expense</h3>
+    <input type="number" inputmode="decimal" placeholder="Amount (₹)" id="manual-amount">
+    <input type="text" placeholder="What was it for? (optional)" id="manual-note">
+    <div class="cat-grid" id="manual-cats"></div>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" id="manual-cancel">Cancel</button>
+      <button class="btn btn-primary" id="manual-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  const CATEGORIES = [
+    { key: 'food', label: 'Food', icon: '🍽️' },
+    { key: 'transport', label: 'Transport', icon: '🛺' },
+    { key: 'shopping', label: 'Shopping', icon: '🛍️' },
+    { key: 'bills', label: 'Bills', icon: '🧾' },
+    { key: 'groceries', label: 'Groceries', icon: '🥦' },
+    { key: 'other', label: 'Other', icon: '✦' },
+  ];
+
+  const STORAGE_KEY = 'kharcha_entries';
+  let entries = [];
+  let selectedCat = 'other';
+
+  // ---------- Storage (in-memory + window.storage persistence) ----------
+  async function loadEntries() {
+    try {
+      const result = await window.storage.get(STORAGE_KEY, false);
+      entries = result ? JSON.parse(result.value) : [];
+    } catch (e) {
+      entries = [];
+    }
+    renderAll();
+  }
+
+  async function saveEntries() {
+    try {
+      await window.storage.set(STORAGE_KEY, JSON.stringify(entries), false);
+    } catch (e) {
+      console.error('Save failed', e);
+      showToast('Could not save — try again');
+    }
+  }
+
+  function addEntry(amount, category, note) {
+    entries.unshift({
+      id: Date.now() + Math.random().toString(36).slice(2, 7),
+      amount: Math.round(amount * 100) / 100,
+      category,
+      note: note || '',
+      ts: Date.now(),
+    });
+    saveEntries();
+    renderAll();
+  }
+
+  // ---------- Voice parsing ----------
+  const CAT_KEYWORDS = {
+    food: ['food', 'lunch', 'dinner', 'breakfast', 'snack', 'coffee', 'tea', 'restaurant', 'zomato', 'swiggy', 'pizza', 'burger', 'chai'],
+    transport: ['petrol', 'diesel', 'fuel', 'uber', 'ola', 'auto', 'rickshaw', 'cab', 'taxi', 'bus', 'train', 'metro', 'parking', 'toll'],
+    shopping: ['shopping', 'clothes', 'shirt', 'shoes', 'amazon', 'flipkart', 'myntra', 'mall'],
+    bills: ['bill', 'electricity', 'recharge', 'wifi', 'internet', 'rent', 'emi', 'insurance', 'subscription', 'netflix'],
+    groceries: ['grocery', 'groceries', 'vegetables', 'veggies', 'kirana', 'supermarket', 'zepto', 'blinkit', 'bigbasket'],
+  };
+
+  const NUMBER_WORDS = {
+    zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10,
+    eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17,
+    eighteen:18, nineteen:19, twenty:20, thirty:30, forty:40, fifty:50, sixty:60,
+    seventy:70, eighty:80, ninety:90, hundred:100, thousand:1000
+  };
+
+  function wordsToNumber(text) {
+    // Try to parse spoken number sequences like "two twenty" -> 220, "five hundred" -> 500
+    const words = text.toLowerCase().split(/\s+/);
+    let total = 0, current = 0, found = false;
+    for (const w of words) {
+      const clean = w.replace(/[^a-z]/g, '');
+      if (clean in NUMBER_WORDS) {
+        found = true;
+        const val = NUMBER_WORDS[clean];
+        if (val === 100) {
+          current = (current || 1) * 100;
+        } else if (val === 1000) {
+          current = (current || 1) * 1000;
+        } else if (val >= 20 && current > 0 && current < 20) {
+          current += val;
+        } else {
+          current += val;
+        }
+      }
+    }
+    total = current;
+    return found ? total : null;
+  }
+
+  function parseTranscript(text) {
+    let amount = null;
+    const digitMatch = text.match(/(\d+(\.\d+)?)/);
+    if (digitMatch) {
+      amount = parseFloat(digitMatch[1]);
+    } else {
+      amount = wordsToNumber(text);
+    }
+
+    let category = 'other';
+    const lower = text.toLowerCase();
+    for (const [cat, keywords] of Object.entries(CAT_KEYWORDS)) {
+      if (keywords.some(k => lower.includes(k))) {
+        category = cat;
+        break;
+      }
+    }
+
+    // note = text with the number stripped out, roughly
+    let note = text.replace(/rupees?/gi, '').replace(/(\d+(\.\d+)?)/, '').trim();
+    if (!note || note.length < 2) note = text;
+
+    return { amount, category, note };
+  }
+
+  // ---------- Speech recognition ----------
+  const micBtn = document.getElementById('mic-btn');
+  const micHint = document.getElementById('mic-hint');
+  let recognizing = false;
+  let recognition = null;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function setupRecognition() {
+    if (!SpeechRecognition) return null;
+    const r = new SpeechRecognition();
+    r.lang = 'en-IN';
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+    r.continuous = false;
+    return r;
+  }
+
+  micBtn.addEventListener('click', () => {
+    if (!SpeechRecognition) {
+      showToast('Voice not supported — try typing instead');
+      openManualSheet();
+      return;
+    }
+    if (recognizing) {
+      recognition && recognition.stop();
+      return;
+    }
+    recognition = setupRecognition();
+    recognizing = true;
+    micBtn.classList.add('listening');
+    micHint.textContent = 'Listening...';
+    micHint.classList.remove('transcript');
+
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      micHint.textContent = '"' + transcript + '"';
+      micHint.classList.add('transcript');
+
+      if (event.results[event.results.length - 1].isFinal) {
+        handleFinalTranscript(transcript);
+      }
+    };
+
+    recognition.onerror = (e) => {
+      recognizing = false;
+      micBtn.classList.remove('listening');
+      if (e.error === 'no-speech') {
+        micHint.textContent = 'Didn\'t catch that — tap to try again';
+      } else if (e.error === 'not-allowed') {
+        micHint.textContent = 'Mic permission needed — enable it in browser settings';
+      } else {
+        micHint.textContent = 'Something went wrong — tap to retry';
+      }
+      micHint.classList.remove('transcript');
+    };
+
+    recognition.onend = () => {
+      recognizing = false;
+      micBtn.classList.remove('listening');
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      recognizing = false;
+      micBtn.classList.remove('listening');
+    }
+  });
+
+  function handleFinalTranscript(transcript) {
+    const { amount, category, note } = parseTranscript(transcript);
+    if (amount === null || amount <= 0) {
+      micHint.textContent = 'Couldn\'t find an amount — try again or type it';
+      micHint.classList.remove('transcript');
+      return;
+    }
+    addEntry(amount, category, note);
+    const catInfo = CATEGORIES.find(c => c.key === category);
+    micHint.textContent = 'Tap and say something like\n"two twenty petrol" or "500 groceries"';
+    micHint.classList.remove('transcript');
+    showToast(`${catInfo.icon} ₹${amount} logged as ${catInfo.label}`);
+  }
+
+  // ---------- Manual entry sheet ----------
+  const sheetBackdrop = document.getElementById('sheet-backdrop');
+  const manualCatsEl = document.getElementById('manual-cats');
+  const manualAmount = document.getElementById('manual-amount');
+  const manualNote = document.getElementById('manual-note');
+
+  CATEGORIES.forEach(cat => {
+    const chip = document.createElement('div');
+    chip.className = 'cat-chip' + (cat.key === selectedCat ? ' selected' : '');
+    chip.textContent = cat.icon + ' ' + cat.label;
+    chip.dataset.key = cat.key;
+    chip.addEventListener('click', () => {
+      selectedCat = cat.key;
+      document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+    });
+    manualCatsEl.appendChild(chip);
+  });
+
+  function openManualSheet() {
+    sheetBackdrop.classList.add('open');
+    manualAmount.value = '';
+    manualNote.value = '';
+    manualAmount.focus();
+  }
+  function closeManualSheet() {
+    sheetBackdrop.classList.remove('open');
+  }
+
+  document.getElementById('manual-open').addEventListener('click', openManualSheet);
+  document.getElementById('manual-cancel').addEventListener('click', closeManualSheet);
+  sheetBackdrop.addEventListener('click', (e) => { if (e.target === sheetBackdrop) closeManualSheet(); });
+
+  document.getElementById('manual-save').addEventListener('click', () => {
+    const amt = parseFloat(manualAmount.value);
+    if (!amt || amt <= 0) {
+      showToast('Enter a valid amount');
+      return;
+    }
+    addEntry(amt, selectedCat, manualNote.value.trim());
+    const catInfo = CATEGORIES.find(c => c.key === selectedCat);
+    showToast(`${catInfo.icon} ₹${amt} logged as ${catInfo.label}`);
+    closeManualSheet();
+  });
+
+  // ---------- Tabs ----------
+  const tabLog = document.getElementById('tab-log');
+  const tabReview = document.getElementById('tab-review');
+  const logView = document.getElementById('log-view');
+  const reviewView = document.getElementById('review-view');
+
+  tabLog.addEventListener('click', () => {
+    tabLog.classList.add('active');
+    tabReview.classList.remove('active');
+    logView.classList.remove('hidden');
+    reviewView.classList.remove('active');
+  });
+  tabReview.addEventListener('click', () => {
+    tabReview.classList.add('active');
+    tabLog.classList.remove('active');
+    logView.classList.add('hidden');
+    reviewView.classList.add('active');
+    renderReview();
+  });
+
+  document.getElementById('period-select').addEventListener('change', renderReview);
+
+  // ---------- Rendering ----------
+  function isToday(ts) {
+    const d = new Date(ts), n = new Date();
+    return d.toDateString() === n.toDateString();
+  }
+
+  function catInfo(key) {
+    return CATEGORIES.find(c => c.key === key) || CATEGORIES[CATEGORIES.length - 1];
+  }
+
+  function renderAll() {
+    renderTodayList();
+  }
+
+  function renderTodayList() {
+    const todayEntries = entries.filter(e => isToday(e.ts));
+    const total = todayEntries.reduce((s, e) => s + e.amount, 0);
+    document.getElementById('today-total').textContent = total.toLocaleString('en-IN');
+
+    const listEl = document.getElementById('today-list');
+    if (todayEntries.length === 0) {
+      listEl.innerHTML = '<div class="empty-note">Nothing logged today yet — tap the mic to start.</div>';
+      return;
+    }
+    listEl.innerHTML = '<div class="heading">Today</div>' + todayEntries.map(e => {
+      const c = catInfo(e.category);
+      const time = new Date(e.ts).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+      return `<div class="entry-row">
+        <div class="entry-icon">${c.icon}</div>
+        <div class="entry-info">
+          <div class="cat">${c.label}</div>
+          <div class="note">${e.note ? escapeHtml(e.note) + ' · ' : ''}${time}</div>
+        </div>
+        <div class="entry-amount">₹${e.amount.toLocaleString('en-IN')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function renderReview() {
+    const period = document.getElementById('period-select').value;
+    let filtered = entries;
+    if (period !== 'all') {
+      const days = parseInt(period, 10);
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+      filtered = entries.filter(e => e.ts >= cutoff);
+    }
+
+    const total = filtered.reduce((s, e) => s + e.amount, 0);
+    document.getElementById('review-total').textContent = total.toLocaleString('en-IN');
+    document.getElementById('review-count').textContent = `${filtered.length} entr${filtered.length === 1 ? 'y' : 'ies'}`;
+
+    // Category breakdown
+    const byCat = {};
+    filtered.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + e.amount; });
+    const sortedCats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+    const maxCat = sortedCats.length ? sortedCats[0][1] : 1;
+
+    const catBarsEl = document.getElementById('cat-bars');
+    if (sortedCats.length === 0) {
+      catBarsEl.innerHTML = '<div class="empty-note">No entries in this period yet.</div>';
+    } else {
+      catBarsEl.innerHTML = sortedCats.map(([key, val]) => {
+        const c = catInfo(key);
+        const pct = Math.max(6, Math.round((val / maxCat) * 100));
+        return `<div class="cat-bar-row">
+          <div class="top"><span class="name">${c.icon} ${c.label}</span><span class="val">₹${val.toLocaleString('en-IN')}</span></div>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%"></div></div>
+        </div>`;
+      }).join('');
+    }
+
+    // Day groups
+    const byDay = {};
+    filtered.forEach(e => {
+      const dayKey = new Date(e.ts).toDateString();
+      if (!byDay[dayKey]) byDay[dayKey] = [];
+      byDay[dayKey].push(e);
+    });
+    const dayKeys = Object.keys(byDay).sort((a, b) => new Date(b) - new Date(a));
+
+    const dayGroupsEl = document.getElementById('day-groups');
+    if (dayKeys.length === 0) {
+      dayGroupsEl.innerHTML = '';
+    } else {
+      dayGroupsEl.innerHTML = dayKeys.map(dayKey => {
+        const dayEntries = byDay[dayKey];
+        const dayTotal = dayEntries.reduce((s, e) => s + e.amount, 0);
+        const label = isToday(dayEntries[0].ts) ? 'Today' : new Date(dayKey).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+        const rows = dayEntries.map(e => {
+          const c = catInfo(e.category);
+          return `<div class="entry-row">
+            <div class="entry-icon">${c.icon}</div>
+            <div class="entry-info">
+              <div class="cat">${c.label}</div>
+              <div class="note">${e.note ? escapeHtml(e.note) : ''}</div>
+            </div>
+            <div class="entry-amount">₹${e.amount.toLocaleString('en-IN')}</div>
+          </div>`;
+        }).join('');
+        return `<div class="day-group">
+          <div class="heading"><span>${label}</span><span>₹${dayTotal.toLocaleString('en-IN')}</span></div>
+          ${rows}
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ---------- Clear data ----------
+  document.getElementById('clear-btn').addEventListener('click', async () => {
+    if (!confirm('Delete all logged expenses? This cannot be undone.')) return;
+    entries = [];
+    await saveEntries();
+    renderAll();
+    renderReview();
+    showToast('All data cleared');
+  });
+
+  // ---------- Toast ----------
+  let toastTimer = null;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // ---------- Init ----------
+  loadEntries();
+})();
+</script>
+
+</body>
+</html>
