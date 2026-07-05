@@ -206,6 +206,8 @@
     font-family: 'Inter', sans-serif;
   }
   .sheet input:focus { outline: 2px solid var(--brass); }
+  .sheet input[type="date"] { color-scheme: dark; }
+  .sheet .field-label { font-size: 12px; color: var(--parchment-dim); font-weight: 600; margin-bottom: -6px; }
   .cat-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -413,6 +415,8 @@
     <h3>Add expense</h3>
     <input type="number" inputmode="decimal" placeholder="Amount (₹)" id="manual-amount">
     <input type="text" placeholder="What was it for? (optional)" id="manual-note">
+    <div class="field-label">Date</div>
+    <input type="date" id="manual-date">
     <div class="cat-grid" id="manual-cats"></div>
     <div class="sheet-actions">
       <button class="btn btn-ghost" id="manual-cancel">Cancel</button>
@@ -458,13 +462,13 @@
     }
   }
 
-  function addEntry(amount, category, note) {
+  function addEntry(amount, category, note, customTs) {
     entries.unshift({
       id: Date.now() + Math.random().toString(36).slice(2, 7),
       amount: Math.round(amount * 100) / 100,
       category,
       note: note || '',
-      ts: Date.now(),
+      ts: customTs || Date.now(),
     });
     saveEntries();
     renderAll();
@@ -641,10 +645,18 @@
     manualCatsEl.appendChild(chip);
   });
 
+  function todayDateStr() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
   function openManualSheet() {
     sheetBackdrop.classList.add('open');
     manualAmount.value = '';
     manualNote.value = '';
+    document.getElementById('manual-date').value = todayDateStr();
+    document.getElementById('manual-date').max = todayDateStr();
     manualAmount.focus();
   }
   function closeManualSheet() {
@@ -661,7 +673,19 @@
       showToast('Enter a valid amount');
       return;
     }
-    addEntry(amt, selectedCat, manualNote.value.trim());
+    const dateVal = document.getElementById('manual-date').value;
+    let customTs = Date.now();
+    if (dateVal) {
+      const picked = new Date(dateVal + 'T00:00:00');
+      const today = new Date();
+      if (picked.toDateString() === today.toDateString()) {
+        customTs = Date.now();
+      } else {
+        picked.setHours(12, 0, 0, 0);
+        customTs = picked.getTime();
+      }
+    }
+    addEntry(amt, selectedCat, manualNote.value.trim(), customTs);
     const catInfo = CATEGORIES.find(c => c.key === selectedCat);
     showToast(`${catInfo.icon} ₹${amt} logged as ${catInfo.label}`);
     closeManualSheet();
