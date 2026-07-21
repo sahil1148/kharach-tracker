@@ -442,11 +442,11 @@
   let entries = [];
   let selectedCat = 'other';
 
-  // ---------- Storage (in-memory + window.storage persistence) ----------
+  // ---------- Storage (localStorage — persists on this device/browser) ----------
   async function loadEntries() {
     try {
-      const result = await window.storage.get(STORAGE_KEY, false);
-      entries = result ? JSON.parse(result.value) : [];
+      const raw = localStorage.getItem(STORAGE_KEY);
+      entries = raw ? JSON.parse(raw) : [];
     } catch (e) {
       entries = [];
     }
@@ -455,7 +455,7 @@
 
   async function saveEntries() {
     try {
-      await window.storage.set(STORAGE_KEY, JSON.stringify(entries), false);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
     } catch (e) {
       console.error('Save failed', e);
       showToast('Could not save — try again');
